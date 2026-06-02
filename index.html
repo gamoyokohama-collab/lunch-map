@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>営業おすすめランチマップ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root {
+      --primary: #E8400A;
+      --primary-dark: #C03008;
+      --accent: #FFB800;
+      --bg: #FDF8F3;
+      --surface: #FFFFFF;
+      --text: #1A1208;
+      --text-sub: #7A6A58;
+      --border: #EDE0D0;
+      --shadow: 0 2px 12px rgba(26,18,8,0.10);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ヘッダー */
+    header {
+      background: var(--primary);
+      color: #fff;
+      padding: 10px 14px 8px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    header .logo {
+      font-family: 'Syne', sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      opacity: 0.85;
+      white-space: nowrap;
+    }
+    header h1 {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      line-height: 1.2;
+    }
+    header .count {
+      margin-left: auto;
+      background: rgba(255,255,255,0.2);
+      border-radius: 20px;
+      padding: 2px 10px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    /* ジャンルフィルター */
+    .filter-bar {
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      overflow-x: auto;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      scrollbar-width: none;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .filter-btn {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      color: var(--text-sub);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-family: inherit;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+
+    /* メインレイアウト */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 地図 */
+    #map {
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* 下部パネル */
+    .list-panel {
+      background: var(--surface);
+      border-top: 2px solid var(--border);
+      height: 220px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .shop-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .shop-item:hover, .shop-item.selected {
+      background: #FFF5EE;
+    }
+    .shop-item .genre-badge {
+      font-size: 10px;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 4px;
+      padding: 2px 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      min-width: 44px;
+      text-align: center;
+    }
+    .shop-item .info {
+      flex: 1;
+      min-width: 0;
+    }
+    .shop-item .name {
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .shop-item .addr {
+      font-size: 11px;
+      color: var(--text-sub);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .shop-item .link-btn {
+      font-size: 18px;
+      text-decoration: none;
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    /* ポップアップ */
+    .leaflet-popup-content-wrapper {
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+    }
+    .popup-inner { min-width: 180px; }
+    .popup-inner .p-genre {
+      font-size: 10px;
+      color: var(--primary);
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .popup-inner .p-name {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      line-height: 1.3;
+    }
+    .popup-inner .p-addr {
+      font-size: 11px;
+      color: var(--text-sub);
+      margin-bottom: 6px;
+    }
+    .popup-inner .p-links {
+      display: flex;
+      gap: 6px;
+    }
+    .popup-inner .p-links a {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      text-decoration: none;
+      background: var(--primary);
+      color: #fff;
+    }
+    .popup-inner .p-links a.map-link {
+      background: #f0f0f0;
+      color: var(--text);
+    }
+
+    /* ローディング */
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 9999;
+    }
+    #loading .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { font-size: 13px; color: var(--text-sub); }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p>お店情報を読み込んでいます…</p>
+</div>
+
+<header>
+  <div>
+    <div class="logo">GAMOU YOKOHAMA</div>
+    <h1>🍜 営業おすすめランチ</h1>
+  </div>
+  <div class="count" id="count-badge">-- 店舗</div>
+</header>
+
+<div class="filter-bar" id="filter-bar">
+  <button class="filter-btn active" data-genre="all">すべて</button>
+</div>
+
+<div class="main">
+  <div id="map"></div>
+  <div class="list-panel" id="list-panel"></div>
+</div>
+
+<script>
+// ============================================================
+// 設定: GASのURLをデプロイ後にここへ貼り付け
+// ============================================================
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxNE2jrd27BdVNcSWu18WGLuUO5UxMOZS0Dwyp_6nVwdxtV-5KCvkP8UUHMR_Zj20hU/exec';
+
+// GASが未設定の場合のフォールバック（KMZから抽出したデータ）
+const FALLBACK_DATA = [
+  { name: "ラーメン ぶぅさん", address: "東京都品川区戸越5-15-1", genre: "ラーメン", tel: "非公開", url: "https://twitter.com/g2xy6cxpqhsxbxd" },
+  { name: "うずとかみなり", address: "神奈川県藤沢市鵠沼桜が岡3-5-7", genre: "ラーメン", tel: "非公開", url: "http://uzurai.stores.jp" },
+  { name: "濃厚鶏そば まつり（茉莉）", address: "神奈川県川崎市中原区新城1-7-4", genre: "ラーメン", tel: "非公開", url: "https://twitter.com/torisobamatsuri" },
+  { name: "ラーメン丸仙", address: "神奈川県川崎市中原区小杉町3-66", genre: "ラーメン", tel: "044-722-2827", url: "https://www.ramen-marusen.com/" },
+  { name: "つけめん三三㐂", address: "神奈川県川崎市川崎区小川町9-7", genre: "ラーメン", tel: "044-246-0076", url: "http://gyoku.co.jp/" },
+  { name: "麺処 懐や", address: "神奈川県川崎市宮前区鷺沼3-3-12", genre: "ラーメン", tel: "非公開", url: "" },
+  { name: "ラーメン 厚木家（あつぎや）", address: "神奈川県厚木市妻田東2-25-11", genre: "ラーメン", tel: "046-222-3888", url: "http://ieke1.com/source/atsugiya/index.html" },
+  { name: "そばじん", address: "神奈川県茅ヶ崎市赤松町3-1", genre: "ラーメン", tel: "0467-39-6808", url: "https://www.instagram.com/sobajin01/" },
+  { name: "寿々喜家", address: "神奈川県横浜市保土ケ谷区上星川2-3-1 1F", genre: "ラーメン", tel: "045-371-6180", url: "" },
+  { name: "成 CH", address: "神奈川県横浜市都筑区仲町台1-14-20 ウィスタリア 1F", genre: "ラーメン", tel: "非公開", url: "https://www.instagram.com/c_nari_h" },
+  { name: "北ノ麺 もりうち", address: "神奈川県横浜市鶴見区鶴見中央4-5-9 エンゼルハイム鶴見中央 1F", genre: "ラーメン", tel: "045-900-0190", url: "http://kitanomen-moriuchi.com/" },
+  { name: "らー麺土俵 鶴嶺峰（カクレイホウ）", address: "神奈川県横浜市鶴見区鶴見中央4-25-6 1F", genre: "ラーメン", tel: "045-504-2207", url: "https://twitter.com/dosukoipower1" },
+  { name: "麺屋 ぬまた", address: "神奈川県横浜市鶴見区鶴見中央1-27-15 トモエビル", genre: "ラーメン", tel: "045-294-8989", url: "https://www.instagram.com/menyanumata/" },
+  { name: "ラーメン二郎 横浜関内店", address: "神奈川県横浜市中区長者町6-94", genre: "ラーメン", tel: "非公開", url: "https://twitter.com/kannaijiro" },
+  { name: "塩らー麺 本丸亭", address: "神奈川県横浜市中区元町1-42", genre: "ラーメン", tel: "非公開", url: "https://www.instagram.com/motomachi_honmarutei" },
+  { name: "麺や魁星", address: "神奈川県横浜市中区吉田町3-11", genre: "ラーメン", tel: "050-5596-7472", url: "https://www.instagram.com/menya.sakigakeboshi" },
+  { name: "味噌ラーメン 雪ぐに", address: "神奈川県横浜市泉区中田東2-6-13", genre: "ラーメン", tel: "045-410-6988", url: "https://yukiguni.yokohama/" },
+  { name: "将龍", address: "神奈川県横浜市青葉区青葉台2-31-18", genre: "ラーメン", tel: "045-984-3513", url: "" },
+  { name: "らぁ麺 すぎ本", address: "神奈川県横浜市青葉区桜台26-1 第3アサキビル 1F", genre: "ラーメン", tel: "045-479-9283", url: "https://twitter.com/ramen_sugimoto" },
+  { name: "ぼっけもん", address: "神奈川県横浜市青葉区あざみ野2-9-10 野本ビルディング 1F", genre: "ラーメン", tel: "045-507-5338", url: "" },
+  { name: "金目鯛らぁ麺 鳳仙花 横浜店", address: "神奈川県横浜市西区南幸2-7-9", genre: "ラーメン", tel: "045-594-7057", url: "https://www.ramenings.com/" },
+  { name: "蒙古タンメン中本 横浜店", address: "神奈川県横浜市西区南幸1-13-8 相鉄南幸第5ビル", genre: "ラーメン", tel: "045-321-1223", url: "https://www.moukotanmen-nakamoto.com/n_menu/n_menu_yokohama" },
+  { name: "らぁ麺 はやし田 横浜店", address: "神奈川県横浜市神奈川区鶴屋町2-19-6 1F", genre: "ラーメン", tel: "045-548-8998", url: "https://ramen-hayashida.stores.jp/" },
+  { name: "中華そば 高野", address: "神奈川県横浜市神奈川区大口通135-11", genre: "ラーメン", tel: "045-717-9042", url: "https://twitter.com/takano2018" },
+  { name: "麺場 ハマトラ 日吉店", address: "神奈川県横浜市港北区日吉本町1-6-21 日吉黒田ビル1F", genre: "ラーメン", tel: "045-564-8618", url: "https://hamatora.co.jp/" },
+  { name: "らぁ麺 にし田", address: "神奈川県横浜市港北区日吉本町1-21-6 脇田ビル 1F", genre: "ラーメン", tel: "045-548-9449", url: "https://twitter.com/ramen_nishida" },
+  { name: "柴田商店", address: "神奈川県横浜市港北区日吉2-2-11", genre: "ラーメン", tel: "045-563-8368", url: "" },
+  { name: "ラーメン 環2家（かんにや）", address: "神奈川県横浜市港南区下永谷3-3-21", genre: "ラーメン", tel: "045-825-3195", url: "https://kan2ya.com/" },
+  { name: "麺や 幸村", address: "神奈川県横浜市戸塚区戸塚町3961", genre: "ラーメン", tel: "045-865-4477", url: "" },
+  { name: "ラーメン 杉田家", address: "神奈川県横浜市磯子区新杉田町3-5", genre: "ラーメン", tel: "045-776-2155", url: "http://www.sugitaya.com/" },
+  { name: "らぁ麺しろ", address: "神奈川県横須賀市日の出町1-16 ハイネス横須賀中央101", genre: "ラーメン", tel: "非公開", url: "https://www.instagram.com/Ramen.Shiro" },
+  { name: "ふく屋", address: "神奈川県川崎市中原区新丸子町733", genre: "とんかつ", tel: "044-722-6577", url: "https://tabelog.com/kanagawa/A1405/A140504/14040226/" },
+  { name: "王家菜館", address: "神奈川県横浜市港南区上大岡東1-9-15 パルテノンビル2F", genre: "中華料理", tel: "050-5489-3881", url: "https://r.gnavi.co.jp/67d919110000/" },
+  { name: "旬彩 よし家", address: "神奈川県川崎市中原区小杉町1-525-1", genre: "日本料理", tel: "044-712-5850", url: "https://tabelog.com/kanagawa/A1405/A140504/14061274/" },
+  { name: "KOSUGI CURRY", address: "神奈川県川崎市中原区新丸子東2-897-11", genre: "カレー", tel: "044-571-7186", url: "https://www.kosugicurry.com/" },
+  { name: "コピーピー 小杉店", address: "神奈川県川崎市中原区新丸子町915-2 サミットビル1F", genre: "タイ料理", tel: "044-722-7009", url: "https://kohphiphi.jp/shop02/" },
+  { name: "ATARAYO食堂", address: "神奈川県横浜市港北区菊名1-7-2", genre: "その他", tel: "非公開", url: "https://tabelog.com/kanagawa/A1401/A140205/14077349/" },
+  { name: "TOTSZEN BAKER'S KITCHEN", address: "神奈川県横浜市港北区大倉山2-1-11", genre: "パン", tel: "045-548-0568", url: "https://www.instagram.com/totszenbk/" },
+  { name: "久木田バル", address: "神奈川県横浜市神奈川区西神奈川1-15-10 メゾンピントール 1F", genre: "バル", tel: "非公開", url: "https://www.instagram.com/kukita_bar/" },
+  { name: "Mario Barba", address: "神奈川県川崎市高津区溝口1-1-2", genre: "イタリアン", tel: "050-5590-6362", url: "https://www.instagram.com/mariobarba_oyster/" },
+  { name: "とんかつ華家", address: "神奈川県川崎市高津区梶ケ谷3丁目7-25", genre: "とんかつ", tel: "044-888-8810", url: "https://tabelog.com/kanagawa/A1405/A140505/14023460/" },
+  { name: "らっきょ&Star", address: "神奈川県横浜市港北区綱島西1丁目2-9 ゴールデンパーク1階", genre: "カレー", tel: "045-542-3939", url: "https://spicegogo.com/restaurant/#tsunashima" },
+  { name: "香味", address: "東京都世田谷区玉川2丁目23-1 二子玉川ライズ オークモール1F", genre: "中華料理", tel: "03-3700-6971", url: "https://tabelog.com/tokyo/A1317/A131708/13110178/" },
+  { name: "三ちゃん食堂", address: "神奈川県川崎市中原区新丸子町733", genre: "中華料理", tel: "044-722-2863", url: "https://tabelog.com/kanagawa/A1405/A140504/14003565/" },
+  { name: "スタミナカレーの店バーグ 杉田本店", address: "神奈川県横浜市磯子区杉田1丁目1-1", genre: "カレー", tel: "045-774-8372", url: "http://www.staminaburg.com/" },
+  { name: "カレーとハンバーグの店 バーグ 戸部店", address: "神奈川県横浜市西区戸部町7丁目231-1 エルストーク1階", genre: "カレー", tel: "045-316-8989", url: "http://www.staminaburg.com/" },
+  { name: "麺小屋 てち", address: "神奈川県川崎市中原区新城4丁目4-15 森善ビル1階", genre: "ラーメン", tel: "044-948-4614", url: "https://mengoyatechi.shop-pro.jp/" },
+  { name: "PENNY'S DINER", address: "神奈川県横浜市中区山下町海岸通り1-1 貿易協会ビル1F", genre: "ハンバーガー", tel: "045-228-7742", url: "https://www.pennysdiner-yokohama.com/" },
+  { name: "CENTRAL BURGER SHOP", address: "神奈川県横浜市中区石川町2-85-5", genre: "ハンバーガー", tel: "045-278-7914", url: "https://www.instagram.com/central_burger_shop/" },
+  { name: "CRAFTMANS BURGER", address: "神奈川県逗子市逗子1-5-21 第2菊地ビル3F", genre: "ハンバーガー", tel: "046-827-7937", url: "https://www.instagram.com/craftsmansburger/" }
+];
+
+// ジャンルカラー
+const GENRE_COLORS = {
+  'ラーメン':    '#E8400A',
+  'カレー':      '#FFB800',
+  'ハンバーガー':'#2D9E6B',
+  'とんかつ':    '#9B4DCA',
+  '中華料理':    '#E84393',
+  'タイ料理':    '#22BABB',
+  'イタリアン':  '#3D8BFF',
+  '日本料理':    '#7B6F3A',
+  'パン':        '#C07A28',
+  'バル':        '#5B5EA6',
+  'その他':      '#888888',
+};
+
+function genreColor(genre) {
+  return GENRE_COLORS[genre] || '#888888';
+}
+
+// ジャンルアイコン
+const GENRE_ICONS = {
+  'ラーメン':'🍜','カレー':'🍛','ハンバーガー':'🍔',
+  'とんかつ':'🥩','中華料理':'🥟','タイ料理':'🍲',
+  'イタリアン':'🍝','日本料理':'🍱','パン':'🥐',
+  'バル':'🍷','その他':'🍽️',
+};
+
+// Geocode cache
+const geoCache = {};
+
+async function geocode(address) {
+  if (geoCache[address]) return geoCache[address];
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=jp`;
+  try {
+    const res = await fetch(url, { headers: { 'Accept-Language': 'ja' } });
+    const data = await res.json();
+    if (data.length > 0) {
+      const coord = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      geoCache[address] = coord;
+      return coord;
+    }
+  } catch(e) {}
+  return null;
+}
+
+// 地図初期化
+const map = L.map('map', { zoomControl: true }).setView([35.44, 139.54], 11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+let allShops = [];
+let markers = [];
+let currentGenre = 'all';
+let selectedIndex = null;
+
+function createMarkerIcon(genre) {
+  const color = genreColor(genre);
+  const icon = GENRE_ICONS[genre] || '📍';
+  return L.divIcon({
+    html: `<div style="
+      background:${color};
+      width:30px;height:30px;
+      border-radius:50% 50% 50% 0;
+      transform:rotate(-45deg);
+      border:2px solid white;
+      box-shadow:0 2px 6px rgba(0,0,0,0.3);
+      display:flex;align-items:center;justify-content:center;
+    "><span style="transform:rotate(45deg);font-size:13px;">${icon}</span></div>`,
+    className: '',
+    iconSize: [30, 30],
+    iconAnchor: [15, 30],
+    popupAnchor: [0, -32],
+  });
+}
+
+function buildPopup(shop) {
+  const mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shop.name + ' ' + shop.address)}`;
+  const urlBtn = shop.url ? `<a href="${shop.url}" target="_blank">公式サイト</a>` : '';
+  return `<div class="popup-inner">
+    <div class="p-genre">${GENRE_ICONS[shop.genre]||'🍽️'} ${shop.genre}</div>
+    <div class="p-name">${shop.name}</div>
+    <div class="p-addr">${shop.address}</div>
+    ${shop.tel && shop.tel !== '非公開' ? `<div class="p-addr">📞 ${shop.tel}</div>` : ''}
+    <div class="p-links">
+      <a class="map-link" href="${mapLink}" target="_blank">📍 地図</a>
+      ${urlBtn}
+    </div>
+  </div>`;
+}
+
+function renderList(shops) {
+  const panel = document.getElementById('list-panel');
+  panel.innerHTML = '';
+  shops.forEach((shop, i) => {
+    const div = document.createElement('div');
+    div.className = 'shop-item' + (selectedIndex === i ? ' selected' : '');
+    div.dataset.index = i;
+    const color = genreColor(shop.genre);
+    div.innerHTML = `
+      <span class="genre-badge" style="background:${color}">${GENRE_ICONS[shop.genre]||''} ${shop.genre}</span>
+      <div class="info">
+        <div class="name">${shop.name}</div>
+        <div class="addr">${shop.address}</div>
+      </div>
+      ${shop.url ? `<a class="link-btn" href="${shop.url}" target="_blank">🔗</a>` : ''}
+    `;
+    div.addEventListener('click', () => {
+      const marker = markers[i];
+      if (marker && marker._latlng) {
+        map.setView(marker._latlng, 15, { animate: true });
+        marker.openPopup();
+        selectedIndex = i;
+        renderList(getFilteredShops());
+        panel.scrollTop = div.offsetTop - 60;
+      }
+    });
+    panel.appendChild(div);
+  });
+}
+
+function getFilteredShops() {
+  if (currentGenre === 'all') return allShops;
+  return allShops.filter(s => s.genre === currentGenre);
+}
+
+function renderFilter(shops) {
+  const genres = [...new Set(shops.map(s => s.genre))].sort();
+  const bar = document.getElementById('filter-bar');
+  bar.innerHTML = '<button class="filter-btn active" data-genre="all">すべて</button>';
+  genres.forEach(g => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn';
+    btn.dataset.genre = g;
+    btn.textContent = (GENRE_ICONS[g]||'') + ' ' + g;
+    bar.appendChild(btn);
+  });
+  bar.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentGenre = btn.dataset.genre;
+      bar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      applyFilter();
+    });
+  });
+}
+
+function applyFilter() {
+  const filtered = getFilteredShops();
+  document.getElementById('count-badge').textContent = filtered.length + '店舗';
+  markers.forEach((m, i) => {
+    if (!m) return;
+    const shop = allShops[i];
+    if (currentGenre === 'all' || shop.genre === currentGenre) {
+      m.addTo(map);
+    } else {
+      m.remove();
+    }
+  });
+  selectedIndex = null;
+  renderList(filtered);
+}
+
+async function loadAndRender(shops) {
+  allShops = shops;
+  markers = new Array(shops.length).fill(null);
+  renderFilter(shops);
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('count-badge').textContent = shops.length + '店舗';
+  renderList(shops);
+
+  // 順次ジオコード＆マーカー配置
+  for (let i = 0; i < shops.length; i++) {
+    const shop = shops[i];
+    const coord = await geocode(shop.address);
+    if (!coord) continue;
+
+    const marker = L.marker([coord.lat, coord.lng], {
+      icon: createMarkerIcon(shop.genre)
+    }).bindPopup(buildPopup(shop));
+
+    marker.on('click', () => {
+      selectedIndex = i;
+      renderList(getFilteredShops());
+      // リストの該当行にスクロール
+      const panel = document.getElementById('list-panel');
+      const items = panel.querySelectorAll('.shop-item');
+      const filteredShops = getFilteredShops();
+      const fi = filteredShops.findIndex(s => s.name === shop.name);
+      if (fi >= 0 && items[fi]) {
+        panel.scrollTop = items[fi].offsetTop - 60;
+      }
+    });
+
+    marker.addTo(map);
+    markers[i] = marker;
+
+    // 200msウェイト（Nominatim利用制限対応）
+    await new Promise(r => setTimeout(r, 200));
+  }
+}
+
+// データ取得
+async function init() {
+  let shops = null;
+
+  if (GAS_URL && GAS_URL !== 'https://script.google.com/macros/s/AKfycbxNE2jrd27BdVNcSWu18WGLuUO5UxMOZS0Dwyp_6nVwdxtV-5KCvkP8UUHMR_Zj20hU/exec') {
+    try {
+      const res = await fetch(GAS_URL);
+      shops = await res.json();
+    } catch(e) {
+      console.warn('GAS取得失敗、フォールバックデータを使用');
+    }
+  }
+
+  if (!shops) shops = FALLBACK_DATA;
+  await loadAndRender(shops);
+}
+
+init();
+</script>
+</body>
+</html>
