@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -241,8 +242,8 @@
 
 <header>
   <div>
-    <div class="logo">GAMO YOKOHAMA</div>
-    <h1>🍜 営業おすすめランチ情報</h1>
+    <div class="logo">GAMOU YOKOHAMA</div>
+    <h1>🍜 営業おすすめランチ</h1>
   </div>
   <div class="count" id="count-badge">-- 店舗</div>
 </header>
@@ -487,10 +488,20 @@ async function loadAndRender(shops) {
   document.getElementById('count-badge').textContent = shops.length + '店舗';
   renderList(shops);
 
-  // 順次ジオコード＆マーカー配置
+  // マーカー配置（GAS座標優先 → Nominatimフォールバック）
   for (let i = 0; i < shops.length; i++) {
     const shop = shops[i];
-    const coord = await geocode(shop.address);
+    let coord = null;
+
+    if (shop.lat && shop.lng) {
+      // GASから座標が来ている場合はそのまま使う
+      coord = { lat: shop.lat, lng: shop.lng };
+    } else {
+      // 座標がない場合はNominatimでジオコード
+      coord = await geocode(shop.address);
+      await new Promise(r => setTimeout(r, 200));
+    }
+
     if (!coord) continue;
 
     const marker = L.marker([coord.lat, coord.lng], {
@@ -500,7 +511,6 @@ async function loadAndRender(shops) {
     marker.on('click', () => {
       selectedIndex = i;
       renderList(getFilteredShops());
-      // リストの該当行にスクロール
       const panel = document.getElementById('list-panel');
       const items = panel.querySelectorAll('.shop-item');
       const filteredShops = getFilteredShops();
@@ -512,9 +522,6 @@ async function loadAndRender(shops) {
 
     marker.addTo(map);
     markers[i] = marker;
-
-    // 200msウェイト（Nominatim利用制限対応）
-    await new Promise(r => setTimeout(r, 200));
   }
 }
 
